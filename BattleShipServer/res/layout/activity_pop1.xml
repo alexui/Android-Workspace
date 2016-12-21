@@ -1,0 +1,37 @@
+ <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="vertical"
+    tools:context="com.example.battleship.PlayerName"
+    android:id="@+id/l"
+     >
+    
+     <Button
+         android:id="@+id/button1"
+         android:layout_width="300dp"
+         android:layout_height="80dp"
+         android:background="@android:color/white"
+         android:clickable="true"
+         android:text="Android"
+         android:textColor="#ff00ddff"
+         android:textStyle="bold" />
+     <View 
+         android:layout_width="fill_parent"
+         android:layout_height="2dip"
+         android:background="@android:color/black"
+ />
+
+        <Button
+            android:id="@+id/button2"
+            android:layout_width="300dp"
+            android:layout_height="80dp"
+            
+            android:background="@android:color/white"
+            android:clickable="true"
+            android:text="Intel Galileo"
+            android:textColor="#ff00ddff"
+            android:textStyle="bold" />
+
+   
+</LinearLayout>

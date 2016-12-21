@@ -1,0 +1,1131 @@
+package com.example.battleship;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.StringTokenizer;
+import java.util.UUID;
+
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.StatusLine;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
+
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.Dialog;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothServerSocket;
+import android.bluetooth.BluetoothSocket;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.os.Handler;
+import android.view.GestureDetector;
+import android.view.GestureDetector.SimpleOnGestureListener;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.View.OnTouchListener;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import android.view.animation.DecelerateInterpolator;
+import android.view.animation.TranslateAnimation;
+import android.widget.Button;
+import android.widget.TableLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+import android.widget.ViewSwitcher;
+
+//trebuie creata o clasa noua cu un constructor care sa obtina contextul unei activitati
+class SearchingThread extends Thread{
+	
+	MultiPlayer act;
+	
+	public SearchingThread(MultiPlayer act){
+		this.act=act;
+	}
+	
+	 @Override
+     public void run() {
+   	  act.makeBlueToothConnection();
+   	  long startTime = System.currentTimeMillis(); //fetch starting time
+		  while((System.currentTimeMillis()-startTime)<act.TIMEOUT);
+		  act.mBluetoothAdapter.cancelDiscovery();
+		  act.runOnUiThread(new Runnable() {
+			    public void run() {
+			        act.closeSearchingDialog();
+			    }
+			});
+     }
+}
+
+class WriteThread extends Thread{
+	
+	byte[] bts;
+	MultiPlayer.ConnectedThread ct;
+	
+	public WriteThread(byte[] bts,MultiPlayer.ConnectedThread ct){
+		this.bts=bts;
+		this.ct=ct;
+	}
+
+	@Override
+	public void run() {
+		synchronized (this) {
+			ct.write(bts);
+			notify();
+		}
+	}
+	
+}
+
+class ConnectingWindow{
+	
+	MultiPlayer act;
+	Thread thread;
+	final BluetoothSocket socket;
+	
+	public ConnectingWindow(MultiPlayer act,Thread t){
+		this.act=act;
+		thread=t;
+		socket=null;
+	}
+	
+     public void run() {
+   	  
+    	act.makeServerClientConnection();
+    	/*thread.start();
+		synchronized (thread) {
+			try {
+				System.out.println("waiting for the thread...");
+				thread.wait();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}*/
+   	  	   	  	
+		if(!socket.isConnected())
+    		act.closeAndSearchgAgain();
+    	else
+    		act.closeConnectingDialog();
+     }
+}
+
+class ConnectingThread extends Thread{
+	
+	MultiPlayer act;
+	
+	public ConnectingThread(MultiPlayer act){
+		this.act=act;
+	}
+	
+	 @Override
+     public void run() {
+		  act.makeServerClientConnection();
+   	  	  long startTime = System.currentTimeMillis(); //fetch starting time
+		  while((System.currentTimeMillis()-startTime)<act.TIMEOUT);
+		  act.runOnUiThread(new Runnable() {
+			    public void run() {
+		    		//act.closeAndSearchgAgain();
+		    		act.closeConnectingDialog();
+			    }
+			});
+     }
+}
+
+class OnSwipeTouchListener implements OnTouchListener {
+
+    private final GestureDetector gestureDetector;
+
+    public OnSwipeTouchListener(Context context) {
+        gestureDetector = new GestureDetector(context, new GestureListener());
+    }
+
+    public void onSwipeLeft() {
+    }
+
+    public void onSwipeRight() {
+    }
+
+    public boolean onTouch(View v, MotionEvent event) {
+        return gestureDetector.onTouchEvent(event);
+    }
+
+    private final class GestureListener extends SimpleOnGestureListener {
+
+        private static final int SWIPE_DISTANCE_THRESHOLD = 1;
+        private static final int SWIPE_VELOCITY_THRESHOLD = 1;
+
+        @Override
+        public boolean onDown(MotionEvent e) {
+            return true;
+        }
+
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            float distanceX = e2.getX() - e1.getX();
+            float distanceY = e2.getY() - e1.getY();
+            if (Math.abs(distanceX) > Math.abs(distanceY) && Math.abs(distanceX) > SWIPE_DISTANCE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                if (distanceX > 0)
+                    onSwipeRight();
+                else
+                    onSwipeLeft();
+                return true;
+            }
+            return false;
+        }
+    }
+}
+
+public class MultiPlayer extends PlayerActivity {
+
+	Animation slide_in_left, slide_out_right;
+	ViewSwitcher vs;
+	TableLayout tl1,tl2;
+	String player1,player2;
+	TextView p1,p2,result1,result2;
+	BluetoothServerSocket mmServerSocket;
+	BluetoothSocket socket;
+	BluetoothAdapter mBluetoothAdapter;
+	BroadcastReceiver mReceiver;
+	Integer TIME_LIMIT_SERVER=10000;
+	Integer TIMEOUT =15000;
+	Integer WAIT= 500;
+	HashMap<Button,Integer> myField,opField;
+	ArrayList<BDevice> mArrayAdapter;
+	ArrayList<BluetoothDevice> mDevices;
+	Set<BluetoothDevice> pairedDevices;
+	Dialog pop;
+	final int REQ=2;
+	final int BTCONNECTION =3;
+	final int HIT=-1;
+	final int HEAD=-2;
+	
+	Position head1,head2;
+		
+	final String NAME_PREFIX="NAME ";
+	final String TARGET_PREFIX="POS ";
+	final String HIT_RESULT_PREFIX="HIT ";
+	final String MISSED_RESULT_PREFIX="MISS ";
+	final String LOSER_PREFIX="LOS ";
+	final String HEAD_PREFIX="HEAD ";
+	final String HEAD_RESULT_PREFIX="HEAD ";
+	final String RESULT_PREFIX="RES ";
+	
+	final int NAME =1,TARGET=2,HD=3,RESULT=4,HIT_RESULT=5,MISSED_RESULT=6,HEAD_RESULT=7,LOSER=8;
+	public static final Integer PLANE1=1,PLANE2=2,NIL=0;
+	
+	Integer field[][];
+	BluetoothDevice btd;
+	ConnectedThread ct;
+	int position;
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.my_field_activity);
+		
+		vs = (ViewSwitcher) findViewById(R.id.viewSwitcher);
+		tl1 = (TableLayout) findViewById(R.id.TABLE1);
+		tl2 = (TableLayout) findViewById(R.id.TABLE2);
+		
+		p1 = (TextView) findViewById(R.id.PLAYER1);
+		p2 = (TextView) findViewById(R.id.PLAYER2);
+		result1=(TextView) findViewById(R.id.RESULT1);
+		result2=(TextView) findViewById(R.id.RESULT2);
+		
+		field = new Integer[DrawPlane.SQUARE_NO+1][DrawPlane.SQUARE_NO+1];
+		initializeField(field, DrawPlane.SQUARE_NO_VERTICAL, DrawPlane.SQUARE_NO_HORIZONTAL);
+		myField = new HashMap<Button, Integer>();
+		opField = new HashMap<Button, Integer>();
+		
+		slide_in_left = AnimationUtils.loadAnimation(this,R.anim.slide_to_left);
+		slide_out_right = AnimationUtils.loadAnimation(this,R.anim.slide_to_right);
+		  
+		View v = findViewById(R.id.main);
+		  
+		v.setOnTouchListener(new OnSwipeTouchListener(this.getApplicationContext()){
+			  @Override
+			    public void onSwipeLeft() {
+			        vs.setOutAnimation(outToLeftAnimation());
+			        vs.setInAnimation(inFromRightAnimation());
+			        vs.showPrevious();
+			    }
+			  
+			  @Override
+			    public void onSwipeRight() {
+				  	vs.setOutAnimation(outToRightAnimation());
+			        vs.setInAnimation(inFromLeftAnimation());
+			        vs.showNext();
+			    }
+		  });
+		  	  
+		player1 = getIntent().getStringExtra("name");
+  		p1.setText(player1);
+  		
+  		for(int j=1;j<=DrawPlane.SQUARE_NO_VERTICAL;j++){
+			for(int k=1;k<=DrawPlane.SQUARE_NO_HORIZONTAL;k++){
+				int s; 
+				s= getIntent().getExtras().getInt("cheie"+j+k);
+				int nr;
+				if (j==1)
+					nr=k;
+				else nr=8*(j-1)+k;
+				
+				int id = getResources().getIdentifier("button"+nr, "id", getPackageName());
+				int idp = getResources().getIdentifier("button"+nr+"p", "id", getPackageName());
+				Button b = (Button)findViewById(id);
+				Button bp = (Button)findViewById(idp);
+				if(s==1)
+					b.setBackgroundColor(Color.parseColor("#AC8BF4"));
+				if(s==2)
+					b.setBackgroundColor(Color.parseColor("#67ADF0"));
+				
+				field[j][k]=s;
+				
+				myField.put(b, nr);
+				opField.put(bp,nr);
+			}
+		}  
+  		
+  		findHeads(field,  DrawPlane.SQUARE_NO_VERTICAL, DrawPlane.SQUARE_NO_HORIZONTAL);
+  		
+		  //Searching
+		  pop = new Searching(MultiPlayer.this);
+		  pop.setCanceledOnTouchOutside(false);
+          pop.show();
+		  
+		  Thread t = new SearchingThread(this);
+		  t.start();	  
+	}
+	
+	public void initializeField(Integer matrix[][],int rows,int cols){
+		for (int i=0;i<=rows;i++)
+			for(int j=0;j<=cols;j++){
+				matrix[i][j]=NIL;
+			}
+	}
+	
+	public void closeSearchingDialog(){
+		pop.dismiss();
+		Intent i = new Intent(MultiPlayer.this,Devices.class);
+				
+		i.putExtra("nr", mArrayAdapter.size());
+		for(int k=0;k<mArrayAdapter.size();k++){
+			i.putExtra("name"+k, mArrayAdapter.get(k).name);
+			i.putExtra("address"+k, mArrayAdapter.get(k).address);
+		}
+		
+		startActivityForResult(i, REQ);
+	}
+	
+	public void closeConnectingDialog(){
+		pop.dismiss();
+	}
+	
+	public void closeAndSearchgAgain(){
+		pop.dismiss();
+
+  	  	//Searching
+		pop = new Searching(MultiPlayer.this);
+		pop.setCanceledOnTouchOutside(false);
+		pop.show();
+		
+		Toast.makeText(MultiPlayer.this, "Connection Lost",Toast.LENGTH_SHORT).show();
+  		  
+		Thread t = new SearchingThread(MultiPlayer.this);
+		t.start();
+	}
+	
+	public void onActivityResult(int requestCode,int resultCode,Intent data){
+		if(requestCode==REQ){
+			if(resultCode==Activity.RESULT_OK){
+				
+				if(data.getBooleanExtra("REDO", false))
+				{
+					//afiseaza dialog de asteptare
+					pop = new Searching(MultiPlayer.this);
+					pop.setCanceledOnTouchOutside(false);
+			        pop.show();
+					
+			        //cauta dispozitive bluetooth
+					Thread t = new SearchingThread(MultiPlayer.this);
+					t.start();
+				}
+				else{
+				
+					position = data.getIntExtra("pos", 0);
+					String addr = mArrayAdapter.get(position).address;
+					System.out.println("address:"+addr);
+					addr = addr+"\n"+mArrayAdapter.get(position).name;
+					
+					pop= new Connecting(MultiPlayer.this);
+					pop.setCanceledOnTouchOutside(false);
+					pop.show();
+					
+					/*ConnectingWindow cw = new ConnectingWindow(MyFieldFight.this,new ServerClientConnection());
+					cw.run();*/
+					Thread t = new ConnectingThread(MultiPlayer.this);
+					t.start();
+				}
+			}
+		}
+		
+		if(requestCode==BTCONNECTION){
+			discoverBlueToothDevices();			
+		}
+	}
+		
+	static public byte[] object2Bytes( Object o ) throws IOException {
+	      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+	      ObjectOutputStream oos = new ObjectOutputStream( baos );
+	      oos.writeObject( o );
+	      return baos.toByteArray();
+	    }
+		
+	public void makeConnection(){
+				
+		Thread thread = new Thread()
+		  {
+		      @Override
+		      public void run() {
+			    	HttpClient httpclient = new DefaultHttpClient();
+			        HttpResponse response;
+			        String responseString=null;
+					try {
+						response = httpclient.execute(new HttpGet("http://www.google.com"));
+						StatusLine statusLine = response.getStatusLine();
+					        if(statusLine.getStatusCode() == HttpStatus.SC_OK){
+					            ByteArrayOutputStream out = new ByteArrayOutputStream();
+					            response.getEntity().writeTo(out);
+					            out.close();
+					             responseString= out.toString();
+					            //..more logic
+					        } else{
+					            //Closes the connection.
+					            response.getEntity().getContent().close();
+					            throw new IOException(statusLine.getReasonPhrase());
+					        }
+					} catch (ClientProtocolException e) {
+						e.printStackTrace();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+					
+					System.out.println("string: "+responseString);
+		      }
+		  };
+
+		 thread.start();
+	}
+
+	@SuppressLint("ShowToast")
+	public void makeBlueToothConnection(){
+		
+		mArrayAdapter= new ArrayList<BDevice>();
+		mDevices = new ArrayList<BluetoothDevice>();
+		mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+		
+		//Get the BluetoothAdapter
+		if (mBluetoothAdapter == null) {
+			return ;
+		}
+		
+		//Enable Bluetooth
+		if (!mBluetoothAdapter.isEnabled()) {
+		    Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+			startActivityForResult(enableBtIntent,BTCONNECTION);
+		}
+		else{	
+			discoverBlueToothDevices();
+		}
+	}
+
+	public void discoverBlueToothDevices(){
+		//Discovering devices
+		//Querying paired devices
+		pairedDevices = mBluetoothAdapter.getBondedDevices();
+		// If there are paired devices
+		if (pairedDevices.size() > 0) {
+		    // Loop through paired devices
+		    for (BluetoothDevice device : pairedDevices) {
+		        // Add the name and address to an array adapter to show in a ListView
+		    	BDevice new_d = new BDevice(device.getName(),device.getAddress());
+		    	if(!mArrayAdapter.contains(new_d)){
+		    		mArrayAdapter.add(new_d);
+		    		mDevices.add(device);
+		    	}
+		    }
+		}
+			
+		//Enabling discoverability
+		Intent discoverableIntent = new
+				Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
+		discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300);
+		startActivity(discoverableIntent);
+				
+		if(mBluetoothAdapter.isDiscovering()){
+			mBluetoothAdapter.cancelDiscovery();
+		}
+		else{
+			Boolean discovery= mBluetoothAdapter.startDiscovery();
+			if(!discovery){
+				finish();
+			}		
+		}
+		
+	
+		// Create a BroadcastReceiver for ACTION_FOUND
+		 mReceiver= new BroadcastReceiver() {
+		    public void onReceive(Context context, Intent intent) {
+		        String action = intent.getAction();
+		        // When discovery finds a device
+		        if (BluetoothDevice.ACTION_FOUND.equals(action)) {
+		            // Get the BluetoothDevice object from the Intent
+		            BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+		            // Add the name and address to an array adapter to show in a ListView
+		            BDevice new_d = new BDevice(device.getName(),device.getAddress());
+			    	if(!mArrayAdapter.contains(new_d)){
+			    		mArrayAdapter.add(new_d);
+			    		mDevices.add(device);
+			    	}
+			        System.out.println(""+device.getName()+"  "+device.getAddress());
+
+		        }
+		    }
+		};
+		// Register the BroadcastReceiver
+		IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
+		registerReceiver(mReceiver, filter); // Don't forget to unregister during onDestroy
+	}
+	
+	public class ServerClientConnection extends Thread{
+		
+		@Override
+		public void run(){
+			synchronized (this) {
+				makeServerClientConnection();
+				notify();
+			}
+		}
+	}
+	
+	@SuppressLint("NewApi")
+	public BluetoothSocket makeServerClientConnection(){
+		
+		socket=null;
+		
+		AcceptThread server = new AcceptThread(MultiPlayer.this);
+		server.start();
+		
+		System.out.println("Conectat server: "+(socket!=null));
+			
+		if(socket==null)
+		{
+			btd = mDevices.get(position);
+			System.out.println("Connecting to "+btd.getName());
+			ConnectThread client = new ConnectThread(btd,MultiPlayer.this);
+			client.start();
+		}
+		
+		return socket;
+	}
+		
+	public void manageConnectedSocket(BluetoothSocket socket) {
+		  
+        ct = new ConnectedThread(socket);
+        
+        for(Button bp : opField.keySet())
+        {				
+			bp.setOnClickListener(new OnClickListener() {
+					
+					@Override
+					public void onClick(View v) {
+						Button b = (Button)v;
+						
+						int i = opField.get(b);
+												
+						String text = TARGET_PREFIX+i;
+						System.out.println(text);
+						byte[] bytes = text.getBytes();
+						ct.write(bytes);
+					}
+			});
+		}     
+        
+        System.out.println("Time for reading");
+    	ct.read();	
+    	System.out.println("reading...");
+    	
+
+        String hello;
+    	hello = NAME_PREFIX+player1;
+    	ct.write(hello.getBytes());
+    	
+	}
+		
+	@SuppressLint("NewApi")	
+	private class AcceptThread extends Thread {
+	   	 
+		MultiPlayer act;
+				
+	    public AcceptThread(MultiPlayer act) {
+	        // Use a temporary object that is later assigned to mmServerSocket,
+	        // because mmServerSocket is final
+	    	this.act=act;
+	        BluetoothServerSocket tmp = null;
+	        try {
+	            // MY_UUID is the app's UUID string, also used by the client code
+	            tmp = mBluetoothAdapter.listenUsingRfcommWithServiceRecord(this.getName(), new UUID(NORM_PRIORITY, NORM_PRIORITY));
+	        } catch (IOException e) { }
+	        mmServerSocket = tmp;
+	        System.out.println("accept thread");
+	    }
+	 
+	    public void run() {
+	    					
+	        // Keep listening until exception occurs or a socket is returned
+		        while (true) {
+		            try {
+		            	System.out.println("listening");
+		            	//int time = random.nextInt(TIME_LIMIT2)+TIME_LIMIT1;
+		            	int time=TIME_LIMIT_SERVER;
+		            	System.out.println("Waiting: "+time+" seconds.");
+		                socket = mmServerSocket.accept(time);
+		            } catch (IOException e) {
+		            	System.out.println("socket down");
+		                break;
+		            }
+		            // If a connection was accepted
+		            if (socket != null) {
+		                // Do work to manage the connection (in a separate thread)
+		                System.out.println("received");
+		                //mutare cancel	                
+		                cancel();		                
+						System.out.println("Socket closed.");
+		                break;
+		            }
+		        }
+	        	//aici
+		        System.out.println("Conectat server: "+(socket!=null));
+
+                act.runOnUiThread(new Runnable() {
+    				
+					@Override
+					public void run() {
+						System.out.println("Managing connection");
+						System.out.println("Conectat server: "+(socket!=null)+" "+socket.isConnected());
+						manageConnectedSocket(socket);
+					}
+	        	});
+	    }
+	 
+		/** Will cancel the listening socket, and cause the thread to finish */
+	    public void cancel() {
+	        try {
+	            mmServerSocket.close();
+	        } catch (IOException e) { e.printStackTrace();}
+	    }
+	}
+		
+	@SuppressLint("NewApi")
+	private class ConnectThread extends Thread {
+	    private final BluetoothDevice mmDevice;
+	    private MultiPlayer act;
+	    
+	    public ConnectThread(BluetoothDevice device,MultiPlayer act) {
+	        // Use a temporary object that is later assigned to mmSocket,
+	        // because mmSocket is final
+	        BluetoothSocket tmp = null;
+	        mmDevice = device;
+	        this.act = act;
+	 
+	        // Get a BluetoothSocket to connect with the given BluetoothDevice
+	        try {
+	            // MY_UUID is the app's UUID string, also used by the server code
+	            tmp = mmDevice.createRfcommSocketToServiceRecord(new UUID(NORM_PRIORITY, NORM_PRIORITY));
+	        } catch (IOException e) { }
+	        socket = tmp;
+	        	    	
+	        System.out.println("connect to thread");
+	    }
+	 
+	    public void run() {
+	        // Cancel discovery because it will slow down the connection
+	        mBluetoothAdapter.cancelDiscovery();
+	        
+	        {
+		        try {
+		            // Connect the device through the socket. This will block
+		            // until it succeeds or throws an exception
+		            socket.connect();
+		            System.out.println("socket connected");
+		          //  break;
+		        } catch (IOException connectException) {
+		            // Unable to connect; close the socket and get out
+		            try {
+		                socket.close();
+		            //    break;
+		            } catch (IOException closeException) {
+		            	closeException.printStackTrace();
+		            }
+		            return;
+		        }
+	        
+	    	}
+	 
+            System.out.println("connected");
+            act.runOnUiThread(new Runnable() {
+				
+				@Override
+				public void run() {
+					System.out.println("Managing connection");
+					System.out.println("Conectat client: "+(socket!=null)+" "+socket.isConnected());
+					manageConnectedSocket(socket);
+				}
+			});
+	        // Do work to manage the connection (in a separate thread)
+	    }
+	    	 	    
+	}
+	
+	class ConnectedThread{
+	    private final BluetoothSocket mmSocket;
+	    private InputStream mmInStream;
+	    private OutputStream mmOutStream;
+	    int msg_type=0;
+	 
+	    public ConnectedThread(BluetoothSocket socket) {
+	        mmSocket = socket;
+	        InputStream tmpIn = null;
+	        OutputStream tmpOut = null; 
+	 
+	        // Get the input and output streams, using temp objects because
+	        // member streams are final
+	        try {
+	            tmpIn = socket.getInputStream();
+	            tmpOut = socket.getOutputStream();
+	        } catch (IOException e) { }
+	 
+	        mmInStream = tmpIn;
+	        mmOutStream = tmpOut;
+	    }
+	 
+	    public void read() {
+
+	    	Handler handler=new Handler();
+	    	BluetoothSocketListener bsl = new BluetoothSocketListener(mmSocket,handler);
+	    	
+	    	Thread messageListener = new Thread(bsl);
+	    	System.out.println("Create listener thread.");
+	    	messageListener.start();
+		}
+
+		private class BluetoothSocketListener implements Runnable{
+	    	private BluetoothSocket socket;
+	    	private Handler handler;
+	    	public BluetoothSocketListener(BluetoothSocket socket,Handler handler) {
+		    	this.socket = socket;
+		    	this.handler = handler;
+	    	}
+
+	    	@Override
+	    	public void run() {
+		    	int bufferSize = 1024;
+		    	byte[] buffer = new byte[bufferSize];
+		    	try {
+			    	int bytesRead = -1;
+			    	String message = "";
+			    	while (true) {
+				    	message = "";
+				    	bytesRead = mmInStream.read(buffer);
+				    	if (bytesRead != -1) {
+					    	while ((bytesRead==bufferSize)&&(buffer[bufferSize-1] != 0)) {
+						    	message = message + new String(buffer, 0, bytesRead);
+						    	bytesRead = mmInStream.read(buffer);
+				    		}
+					    	message = message + new String(buffer, 0, bytesRead);
+					    	handler.post(new MessageProcess(message));
+					    	socket.getInputStream();
+					    	System.out.println("msg received: "+message);
+				    	}
+			    	}
+			    	
+		    	} catch (IOException e) {
+		    		e.printStackTrace();
+		    	}
+	    	}//end run
+    	}//end class
+
+		private class MessageProcess implements Runnable{
+
+			String msg;
+			
+			public MessageProcess(String text){
+				this.msg=text;
+			}
+			
+			public String getMessageType(String data){
+		    	
+		    	StringTokenizer st = new StringTokenizer(data," ");
+		    	String type = st.nextToken();
+		    	type.trim();
+		    	System.out.println("type: "+type);
+		    	String message= data.substring(data.indexOf(type)+type.length()+1);
+		    	
+		    	if(type.compareTo(NAME_PREFIX.trim())==0)
+		    		msg_type=NAME;
+		    	else if(type.compareTo(TARGET_PREFIX.trim())==0)
+		    		msg_type=TARGET;
+		    	if(type.compareTo(RESULT_PREFIX.trim())==0)
+		    		msg_type= RESULT;
+		    	if(type.compareTo(LOSER_PREFIX.trim())==0)
+		    		msg_type= LOSER;
+		    	if(type.compareTo(HIT_RESULT_PREFIX.trim())==0)
+		    		msg_type= HIT_RESULT;
+		    	if(type.compareTo(MISSED_RESULT_PREFIX.trim())==0)
+		    		msg_type= MISSED_RESULT;
+		    	if(type.compareTo(HEAD_RESULT_PREFIX.trim())==0)
+		    		msg_type= HEAD_RESULT;
+		    	
+		    	return message;
+		    }
+			
+			@Override
+			public void run() {
+				String message = getMessageType(msg);
+				System.out.println("message: "+message+" type: "+msg_type);
+                
+                switch(msg_type){
+                case NAME: 
+                	System.out.println("msg:"+message);
+                	p2.setText(message); 
+                	//available board
+                	for(Button b : opField.keySet()){
+                		b.setEnabled(true);
+                	}
+                	break;
+                	
+                case TARGET:
+                	                	
+                	int i = Integer.parseInt(message); 
+                	int x,y;
+                	x =(i-1)/DrawPlane.SQUARE_NO_HORIZONTAL+1;
+					y =(i-1)%DrawPlane.SQUARE_NO_VERTICAL+1;
+					String text=null;
+					
+					if(field[x][y]==PLANE1 || field[x][y]==PLANE2){
+						
+						int id = getResources().getIdentifier("button"+i, "id", getPackageName());
+						Button b = (Button)findViewById(id);
+						b.setBackgroundColor(Color.RED);
+						
+						Position position = new Position(x, y);
+						if(position.equals(head1) || position.equals(head2))
+						{
+							field[x][y]=HEAD;
+							result1.setText("HEAD");
+							result1.setTextColor(Color.RED);
+							text=RESULT_PREFIX+HEAD_RESULT_PREFIX+i;
+						}
+						else
+						{
+							field[x][y]=HIT;						
+							result1.setText("HIT");
+							result1.setTextColor(Color.RED);
+							text=RESULT_PREFIX+HIT_RESULT_PREFIX+i;
+						}
+						
+					}
+					else{
+						if(field[x][y]==NIL){
+							int id = getResources().getIdentifier("button"+i, "id", getPackageName());
+							Button b = (Button)findViewById(id);
+							b.setBackgroundColor(Color.GREEN);
+							result1.setText("MISSED");
+							result1.setTextColor(Color.GREEN);
+							text=RESULT_PREFIX+MISSED_RESULT_PREFIX+i;
+							}
+					}
+					
+
+					//send result
+					
+					byte[] bts=text.getBytes();
+                	Thread write = new WriteThread(bts, ct);
+                	write.start();
+                	synchronized (write) {
+						System.out.println("waiting for result...");
+						try {
+							write.wait();
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+					}
+                	
+
+					if(checkLooser())
+					{
+						System.out.println("LOOSER");
+						text=LOSER_PREFIX;
+						bts=text.getBytes();
+						
+						write = new WriteThread(bts, ct);
+	                	write.start();
+	                	synchronized (write) {
+							System.out.println("waiting for result...");
+							try {
+								write.wait();
+							} catch (InterruptedException e) {
+								e.printStackTrace();
+							}
+						}
+						
+						pop = new Exiting(MultiPlayer.this, Exiting.ExitType.LOOSER);
+		          		pop.setCanceledOnTouchOutside(false);
+		                pop.show();
+					}
+					
+                	//available board
+                	for(Button b : opField.keySet()){
+                		b.setEnabled(true);
+                	}
+                	break;
+                	
+                case RESULT:
+                	
+                	System.out.println("case result: ");
+					message = getMessageType(message);
+					System.out.println("message: "+message+"type: "+msg_type);
+					
+					int j = Integer.parseInt(message.trim()); 
+                	System.out.println("result j:"+j+".");
+                	int id = getResources().getIdentifier("button"+j+"p", "id", getPackageName());
+					Button b = (Button)findViewById(id);
+					System.out.println("j: "+j);
+                											
+					switch(msg_type){
+            		
+                	case HIT_RESULT:
+                		b.setBackgroundColor(Color.RED);			
+						result2.setText("HIT");
+						result2.setTextColor(Color.RED);
+						break;
+						
+                	case MISSED_RESULT:
+                		b.setBackgroundColor(Color.GREEN);			
+						result2.setText("MISSED");
+						result2.setTextColor(Color.GREEN);
+						break;
+						
+                	case HEAD_RESULT:
+                		b.setBackgroundColor(Color.RED);			
+						result2.setText("HEAD");
+						result2.setTextColor(Color.RED);
+						break;
+                	}
+					
+					for(Button button : opField.keySet()){
+                		button.setEnabled(false);
+                	}
+					
+					break;
+					
+	            case LOSER:
+	                pop = new Exiting(MultiPlayer.this, Exiting.ExitType.WINNER);
+	          		pop.setCanceledOnTouchOutside(false);
+	                pop.show();
+	                break;
+	                	
+	                default:System.out.println("Wrong text received."); break;
+	                }
+			}
+		}
+		
+	    /* Call this from the main activity to send data to the remote device */
+	    public void write(byte[] bytes) {
+	        try {
+	        	System.out.println("writing "+new String(bytes));
+	        	mmOutStream = socket.getOutputStream();
+	            mmOutStream.write(bytes);
+	        } catch (IOException e) { }
+	    }
+	 
+	}
+
+	public Boolean checkLooser(){
+		System.out.println("i: "+head1.y+" j: "+head1.x+"  i: "+head2.y+" j: "+head2.x);
+		if(field[head1.y][head2.x]==HEAD && field[head2.y][head2.x]==HEAD)
+			return true;
+		return false;
+	}
+	
+	public void findHeads(Integer[][] field,int m,int n){
+		
+		int i,j,first_plane=NIL;
+		head1=null;
+		head2=null;
+		for(i=1;i<=n;i++)
+			for(j=1;j<=m;j++){
+				if(field[i][j]!=NIL && field[i][j]!=first_plane){
+					if(j>1 && i+3<=n && j+1<=m)
+					if(field[i][j]==field[i+3][j]){
+						if(field[i+3][j-1]==field[i+3][j] && field[i+3][j]==field[i+3][j+1])
+						{
+							first_plane=field[i][j];
+							if(field[i][j]==PLANE1){
+								head1= new Position(i, j);
+							}
+							if(field[i][j]==PLANE2){
+								head2= new Position(i, j);
+							}
+						}
+						if(field[i][j-1]==field[i][j] && field[i][j]==field[i][j+1])
+						{
+							first_plane=field[i][j];
+							if(field[i][j]==PLANE1){
+								head1= new Position(i+3,j);
+							}
+							if(field[i][j]==PLANE2){
+								head2= new Position(i+3,j);
+							}
+						}
+					}
+					if(i>1 && j+3<=m && i+1<=n)
+					if(field[i][j]==field[i][j+3])
+					{
+						if(field[i-1][j+3]==field[i][j+3] && field[i][j+3]==field[i+1][j+3])
+						{
+							first_plane=field[i][j];
+							if(field[i][j]==PLANE1){
+								head1= new Position(i, j);
+							}
+							if(field[i][j]==PLANE2){
+								head2= new Position(i, j);
+							}
+						}
+						if(field[i-1][j]==field[i][j] && field[i][j]==field[i+1][j])
+						{
+							first_plane=field[i][j];
+							if(field[i][j]==PLANE1){
+								head1= new Position(i, j+3);
+							}
+							if(field[i][j]==PLANE2){
+								head2= new Position(i, j+3);
+							}
+						}
+					}		
+				}
+				if(head1!=null && head2!=null)
+					break;
+			}
+	
+		System.out.println("head1: "+head1);
+		System.out.println("head2: "+head2);
+
+	}
+	
+	@Override
+	public void onBackPressed() {
+		return;
+	}
+	
+	private Animation outToLeftAnimation() {
+	    Animation outtoLeft = new TranslateAnimation(
+	        Animation.RELATIVE_TO_PARENT, 0.0f,
+	        Animation.RELATIVE_TO_PARENT, -1.0f,
+	        Animation.RELATIVE_TO_PARENT, 0.0f,
+	        Animation.RELATIVE_TO_PARENT, 0.0f);
+	    outtoLeft.setDuration(200);
+	    outtoLeft.setInterpolator(new DecelerateInterpolator());
+	    return outtoLeft;
+	    }
+
+	private Animation outToRightAnimation() {
+	    Animation outtoRight = new TranslateAnimation(
+	        Animation.RELATIVE_TO_PARENT, 0.0f,
+	        Animation.RELATIVE_TO_PARENT, +1.0f,
+	        Animation.RELATIVE_TO_PARENT, 0.0f,
+	        Animation.RELATIVE_TO_PARENT, 0.0f);
+	    outtoRight.setDuration(200);
+	    outtoRight.setInterpolator(new DecelerateInterpolator());
+	    return outtoRight;
+	    }
+	
+	private Animation inFromRightAnimation() {
+
+        Animation inFromRight = new TranslateAnimation(
+                Animation.RELATIVE_TO_PARENT, +1.0f,
+                Animation.RELATIVE_TO_PARENT, 0.0f,
+                Animation.RELATIVE_TO_PARENT, 0.0f,
+                Animation.RELATIVE_TO_PARENT, 0.0f);
+        inFromRight.setDuration(200);
+        inFromRight.setInterpolator(new DecelerateInterpolator());
+        return inFromRight;
+        }
+	
+	private Animation inFromLeftAnimation() {
+	    Animation inFromLeft = new TranslateAnimation(
+	        Animation.RELATIVE_TO_PARENT, -1.0f,
+	        Animation.RELATIVE_TO_PARENT, 0.0f,
+	        Animation.RELATIVE_TO_PARENT, 0.0f,
+	        Animation.RELATIVE_TO_PARENT, 0.0f);
+	    inFromLeft.setDuration(200);
+	    inFromLeft.setInterpolator(new DecelerateInterpolator());
+	    return inFromLeft;
+	    }
+	
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+		// TODO Auto-generated method stub
+		getMenuInflater().inflate(R.menu.battle_field_draw, menu);
+		return true;
+	}
+
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item) {
+		// Handle action bar item clicks here. The action bar will
+		// automatically handle clicks on the Home/Up button, so long
+		// as you specify a parent activity in AndroidManifest.xml.
+		int id = item.getItemId();
+
+		switch(id){
+		case R.id.EXIT: finish();
+		}
+		return super.onOptionsItemSelected(item);
+	}
+
+	@Override
+	public void closeActivity(){
+		
+		try {
+            socket.close();
+        } catch (IOException e) {
+        	e.printStackTrace();
+        }
+		
+		finish();
+	}
+
+	@Override
+	protected void onDestroy() {
+		unregisterReceiver(mReceiver);
+		super.onDestroy();
+	}
+		
+}

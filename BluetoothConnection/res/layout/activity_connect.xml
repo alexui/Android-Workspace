@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+   xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="horizontal"
+    android:gravity="center"
+    tools:context="com.example.avioane.Pop" >
+
+     <TextView
+         android:id="@+id/CONNECT"
+         android:layout_width="wrap_content"
+         android:layout_height="wrap_content"
+         android:text="CONNECTING..."
+         android:paddingTop="40dp"
+         android:paddingLeft="40dp"
+         android:paddingRight="10dp"
+         android:paddingBottom="40dp"
+         android:textAppearance="?android:attr/textAppearanceLarge"
+         android:textColor="#ff00ddff"
+         android:textStyle="bold"  />
+
+     <ProgressBar
+         android:id="@+id/progressBar1"
+         style="?android:attr/progressBarStyleLarge"
+         android:layout_width="wrap_content"
+         android:layout_height="wrap_content" />
+ 
+</LinearLayout>

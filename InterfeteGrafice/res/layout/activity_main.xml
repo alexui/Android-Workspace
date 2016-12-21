@@ -1,0 +1,119 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.example.interfetegrafice.MainActivity"
+    tools:ignore="MergeRootFrame" 
+    android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" 
+            android:layout_marginLeft="5dp"
+            android:layout_marginRight="5dp"
+            android:layout_marginTop="20dp"
+            >
+
+            <Button
+                android:id="@+id/button1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#00FF00"
+                android:text="Insert Window" />
+
+            <Button
+                android:id="@+id/button2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Two Windows" 
+                android:background="#008000"
+                />
+
+            <Button
+                android:id="@+id/NEW_WINDOW"
+                android:layout_width="wrap_content"
+                android:layout_height="64dp"
+                android:background="#0000FF"
+                android:text="New Window" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" 
+            android:orientation="horizontal"
+            android:layout_marginLeft="30dp"
+            android:layout_marginRight="30dp"
+            android:padding="5dp"
+            
+            >
+
+            <Button
+                android:id="@+id/INV"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Set Invisible" 
+                android:background="#00FFFF"
+                android:layout_weight="1"
+                android:layout_marginRight="5dp"
+                />
+
+            <Button
+                android:id="@+id/CHG_CLR"
+                android:layout_width="70dp"
+                android:layout_height="70dp"
+                android:text="ChangeColor"
+                android:background="#808080"
+                android:layout_weight="1"
+                />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content" >
+
+            <TextView
+                android:id="@+id/TEXTVIEW"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:layout_weight="2"
+                android:gravity="center"
+                android:text="salut"
+                android:textSize="40dp"
+                android:visibility="visible" />
+            
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content" 
+            android:orientation="vertical"
+            android:gravity="center"
+            >
+	        <Button
+	            android:id="@+id/ACTION"
+	            android:layout_width="wrap_content"
+	            android:layout_height="wrap_content"
+	            android:text="Activity Result"
+	            />
+	        
+	        <Button
+            android:id="@+id/DRAW"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="I wanna draw" />
+
+	        <Button
+	            android:id="@+id/SHARED"
+	            android:layout_width="wrap_content"
+	            android:layout_height="wrap_content"
+	            android:text="Shared Pref" />
+
+	    </LinearLayout>
+
+</LinearLayout>
+
+

@@ -1,0 +1,97 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_marginLeft="30dp"
+    android:background="#00FFF0"
+    tools:context="com.example.project1.MainActivity"
+    tools:ignore="MergeRootFrame" 
+    android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/textView1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="TextView" />
+
+        <TextView
+            android:id="@+id/textView2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Medium Text"
+            android:textAppearance="?android:attr/textAppearanceMedium" />
+
+        <TextView
+            android:id="@+id/textView3"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Small Text"
+            android:textAppearance="?android:attr/textAppearanceSmall" />
+
+        <Button
+            android:id="@+id/button1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Button" 
+            />
+
+    <CheckBox
+        android:id="@+id/checkBox1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Mere" />
+
+    <Button
+        android:id="@+id/buton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:onClick="apasa"
+        android:text="Apasa" />
+    
+    
+        <LinearLayout android:orientation="horizontal"
+            android:layout_height="wrap_content"
+            android:layout_width="fill_parent">
+			<TextView
+			    android:layout_width="80dp"
+			    android:layout_height="wrap_content"
+			    android:text="Nume"/>
+        	<EditText android:layout_height="wrap_content"
+        	    android:layout_width="150dp"/>
+			    
+		</LinearLayout>
+		
+        <LinearLayout android:orientation="horizontal"
+            android:layout_height="wrap_content"
+            android:layout_width="fill_parent">
+			<TextView
+			    android:layout_width="80dp"
+			    android:layout_height="wrap_content"
+			    android:text="Prenume"/>
+        	<EditText android:layout_height="wrap_content"
+        	    android:layout_width="150dp"/>
+			    
+		</LinearLayout>
+		
+        <AbsoluteLayout
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content">
+        	<TextView android:layout_height="wrap_content"
+        	    android:layout_width="wrap_content"
+        	    android:text="Vreau sa am iscriu!"
+        	    android:layout_x="20dp"
+        	    android:layout_y="100dp"
+        	    
+        	    />
+        	<Button android:layout_height="wrap_content"
+        	    android:layout_width="wrap_content"
+        	    android:id="@+id/butonp"
+        	    android:layout_x="100dp"
+        	    android:layout_y="140dp"
+        	    android:background="#00CCCC"
+        	    android:text="Inscrie"/>
+        </AbsoluteLayout>
+ 
+</LinearLayout>    
+
